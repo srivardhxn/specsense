@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>SpecSense - AI Product Intelligence</title>
+<style>
+  :root {
+    --bg: #0b1220; --panel: #131c2e; --border: #223047;
+    --text: #e8eefc; --muted: #8fa3c4; --accent: #4da3ff;
+    --green: #35d07f; --yellow: #f5c542; --red: #ff5d5d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 24px 32px; border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  nav { display: flex; gap: 8px; padding: 16px 32px 0; }
+  nav button { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  nav button.active { background: var(--accent); color: #06111f; border-color: var(--accent); font-weight: 600; }
+  main { padding: 24px 32px; max-width: 900px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  input, textarea { width: 100%; background: #0e1728; border: 1px solid var(--border); color: var(--text); padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-bottom: 12px; }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  button.primary { background: var(--accent); color: #06111f; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .field-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .field-row:last-child { border-bottom: none; }
+  .field-name { color: var(--muted); font-size: 13px; width: 160px; flex-shrink: 0; }
+  .field-value { flex: 1; font-size: 14px; }
+  .badge { font-size: 11px; padding: 3px 8px; border-radius: 999px; font-weight: 600; margin-left: 8px; white-space: nowrap; }
+  .badge.high { background: rgba(53,208,127,0.15); color: var(--green); }
+  .badge.med { background: rgba(245,197,66,0.15); color: var(--yellow); }
+  .badge.low { background: rgba(255,93,93,0.15); color: var(--red); }
+  .source-link { font-size: 11px; color: var(--accent); text-decoration: none; display: block; margin-top: 2px; }
+  .status { font-size: 13px; color: var(--muted); margin: 12px 0; }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 40px 0; }
+  .flagged-item { padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
+  .flagged-item .top { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+  .flagged-item .top .pn { color: var(--accent); font-weight: 600; }
+  .flagged-item input { margin-bottom: 8px; }
+  .flagged-item .actions { display: flex; gap: 8px; }
+  .flagged-item button.small { padding: 6px 12px; font-size: 12px; }
+  .batch-summary { display: flex; gap: 24px; margin-bottom: 16px; }
+  .batch-summary div { text-align: center; }
+  .batch-summary .num { font-size: 24px; font-weight: 700; }
+  .batch-summary .lbl { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SpecSense</h1>
+  <p>AI-Powered Product Intelligence &mdash; minimal input, structured commerce-ready output, explainable at every field.</p>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-tab="single">Single Lookup</button>
+  <button class="tab-btn" data-tab="batch">Batch Mode</button>
+  <button class="tab-btn" data-tab="review">Review Queue</button>
+</nav>
+
+<main>
+
+  <!-- SINGLE LOOKUP -->
+  <div class="panel active" id="panel-single">
+    <div class="card">
+      <label>Part Number</label>
+      <input id="s-part" placeholder="e.g. 4M-1234-B" />
+      <label>Brand</label>
+      <input id="s-brand" placeholder="e.g. Parker" />
+      <label>Short Description</label>
+      <input id="s-desc" placeholder="e.g. Hydraulic quick-connect fitting" />
+      <button class="primary" id="s-run">Process Product</button>
+      <div class="status" id="s-status"></div>
+    </div>
+    <div class="card" id="s-result" style="display:none;"></div>
+  </div>
+
+  <!-- BATCH MODE -->
+  <div class="panel" id="panel-batch">
+    <div class="card">
+      <label>Products (one per line: PartNumber | Brand | Short Description)</label>
+      <textarea id="b-input" rows="6" placeholder="4M-1234-B | Parker | Hydraulic quick-connect fitting
+7R-9981-X | Festo | Pneumatic cylinder"></textarea>
+      <button class="primary" id="b-run">Run Batch</button>
+      <div class="status" id="b-status"></div>
+    </div>
+    <div class="card" id="b-summary" style="display:none;"></div>
+    <div id="b-results"></div>
+  </div>
+
+  <!-- REVIEW QUEUE -->
+  <div class="panel" id="panel-review">
+    <div class="card">
+      <button class="primary" id="r-refresh">Refresh Queue</button>
+      <div class="status" id="r-status"></div>
+    </div>
+    <div id="r-list"></div>
+  </div>
+
+</main>
+
+<script>
+// Empty string = same origin as wherever this page is served from.
+// Locally that's http://localhost:8000. Once deployed (e.g. to Render),
+// it's automatically your live public URL -- no code change needed.
+const API = "";
+
+// ---- Tab switching ----
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+    if (btn.dataset.tab === "review") loadReviewQueue();
+  });
+});
+
+function confidenceBadge(conf) {
+  if (conf >= 0.8) return `<span class="badge high">HIGH ${(conf*100).toFixed(0)}%</span>`;
+  if (conf >= 0.5) return `<span class="badge med">MED ${(conf*100).toFixed(0)}%</span>`;
+  return `<span class="badge low">LOW ${(conf*100).toFixed(0)}%</span>`;
+}
+
+function renderProduct(p) {
+  const fields = ["category","description_long","dimensions","material","weight","certifications"];
+  const labels = {category:"Category", description_long:"Description", dimensions:"Dimensions", material:"Material", weight:"Weight", certifications:"Certifications"};
+  let html = `<div style="margin-bottom:12px;"><strong>${p.brand} &mdash; ${p.part_number}</strong></div>`;
+  fields.forEach(f => {
+    const field = p[f];
+    html += `<div class="field-row">
+      <div class="field-name">${labels[f]}</div>
+      <div class="field-value">
+        ${field.value ? field.value : '<em style="color:var(--muted)">not found</em>'}
+        ${confidenceBadge(field.confidence)}
+        ${field.agreeing_sources > 1 ? `<span class="badge med">${field.agreeing_sources} sources agree</span>` : ""}
+        ${field.source_url ? `<a class="source-link" href="${field.source_url}" target="_blank">${field.source_url}</a>` : ""}
+      </div>
+    </div>`;
+  });
+  return html;
+}
+
+// ---- Single lookup ----
+document.getElementById("s-run").addEventListener("click", async () => {
+  const part_number = document.getElementById("s-part").value.trim();
+  const brand = document.getElementById("s-brand").value.trim();
+  const short_description = document.getElementById("s-desc").value.trim();
+  const statusEl = document.getElementById("s-status");
+  const resultEl = document.getElementById("s-result");
+
+  if (!part_number || !brand || !short_description) {
+    statusEl.textContent = "Fill in all three fields.";
+    return;
+  }
+
+  statusEl.textContent = "Discovering sources -> extracting -> structuring... (this calls a live search + LLM, may take 10-20s)";
+  resultEl.style.display = "none";
+
+  try {
+    const res = await fetch(`${API}/api/process`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ part_number, brand, short_description })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Request failed");
+    }
+    const data = await res.json();
+    resultEl.innerHTML = renderProduct(data);
+    resultEl.style.display = "block";
+    statusEl.textContent = "Done.";
+  } catch (e) {
+    statusEl.textContent = "Error: " + e.message;
+  }
+});
+
+// ---- Batch mode ----
+document.getElementById("b-run").addEventListener("click", async () => {
+  const raw = document.getElementById("b-input").value.trim();
+  const statusEl = document.getElementById("b-status");
+  const summaryEl = document.getElementById("b-summary");
+  const resultsEl = document.getElementById("b-results");
+
+  if (!raw) { statusEl.textContent = "Enter at least one product."; return; }
+
+  const products = raw.split("\n").filter(l => l.trim()).map(line => {
+    const [part_number, brand, short_description] = line.split("|").map(s => s.trim());
+    return { part_number, brand, short_description };
+  });
+
+  statusEl.textContent = `Processing ${products.length} products concurrently...`;
+  summaryEl.style.display = "none";
+  resultsEl.innerHTML = "";
+
+  try {
+    const res = await fetch(`${API}/api/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ products })
+    });
+    const data = await res.json();
+    summaryEl.innerHTML = `<div class="batch-summary">
+      <div><div class="num">${data.total}</div><div class="lbl">Total</div></div>
+      <div><div class="num" style="color:var(--green)">${data.succeeded}</div><div class="lbl">Succeeded</div></div>
+      <div><div class="num" style="color:var(--red)">${data.failed}</div><div class="lbl">Failed</div></div>
+      <div><div class="num">${data.elapsed_seconds}s</div><div class="lbl">Elapsed</div></div>
+    </div>`;
+    summaryEl.style.display = "block";
+    data.results.forEach(p => {
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = renderProduct(p);
+      resultsEl.appendChild(div);
+    });
+    statusEl.textContent = "Done.";
+  } catch (e) {
+    statusEl.textContent = "Error: " + e.message;
+  }
+});
+
+// ---- Review queue ----
+async function loadReviewQueue() {
+  const statusEl = document.getElementById("r-status");
+  const listEl = document.getElementById("r-list");
+  statusEl.textContent = "Loading...";
+  try {
+    const res = await fetch(`${API}/api/review/queue`);
+    const data = await res.json();
+    if (!data.flagged_fields.length) {
+      listEl.innerHTML = `<div class="empty">No fields awaiting review. Process some products first.</div>`;
+      statusEl.textContent = "";
+      return;
+    }
+    listEl.innerHTML = "";
+    data.flagged_fields.forEach(f => {
+      const div = document.createElement("div");
+      div.className = "flagged-item";
+      div.innerHTML = `
+        <div class="top">
+          <span class="pn">${f.brand} &mdash; ${f.part_number}</span>
+          <span>${f.field_name} ${confidenceBadge(f.confidence)}</span>
+        </div>
+        <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">Current value: ${f.current_value || '(none found)'}</div>
+        <input type="text" placeholder="Enter correct value" class="correction-input" />
+        <div class="actions">
+          <button class="primary small submit-btn">Submit Correction</button>
+        </div>
+      `;
+      div.querySelector(".submit-btn").addEventListener("click", async () => {
+        const val = div.querySelector(".correction-input").value.trim();
+        if (!val) return;
+        await fetch(`${API}/api/review/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ part_number: f.part_number, field_name: f.field_name, corrected_value: val })
+        });
+        loadReviewQueue();
+      });
+      listEl.appendChild(div);
+    });
+    statusEl.textContent = `${data.flagged_fields.length} field(s) awaiting review.`;
+  } catch (e) {
+    statusEl.textContent = "Error: " + e.message;
+  }
+}
+document.getElementById("r-refresh").addEventListener("click", loadReviewQueue);
+</script>
+
+</body>
+</html>
